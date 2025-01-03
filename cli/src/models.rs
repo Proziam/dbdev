@@ -79,6 +79,17 @@ impl ReadmeFile {
     }
 }
 
+#[derive(sqlx::FromRow)]
+pub(crate) struct ExtensionVersion {
+    pub(crate) version: String,
+}
+
+#[derive(sqlx::FromRow, PartialEq, Eq, Hash)]
+pub(crate) struct UpdatePath {
+    pub(crate) source: String,
+    pub(crate) target: String,
+}
+
 pub struct Payload {
     /// Absolute path to extension directory
     pub abs_path: Option<PathBuf>,
