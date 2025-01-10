@@ -3,10 +3,7 @@ use std::{collections::HashSet, path::PathBuf};
 use sqlx::{types::chrono::Utc, PgConnection};
 use tokio::fs;
 
-use crate::{
-    models::{Payload, UpdatePath},
-    util::{extension_versions, update_paths},
-};
+use crate::{models::Payload, util::extension_versions};
 
 pub async fn add(
     payload: &Payload,
@@ -35,6 +32,15 @@ pub async fn add(
     ));
     if let Some(comment) = &payload.metadata.comment {
         migration_content.push_str(&format!("-- Comment: {}\n\n", comment));
+    }
+
+    // Add prerequisites first
+    if !&payload.metadata.requires.is_empty() {
+        migration_content.push_str("-- Install prerequisites\n");
+        for req in &payload.metadata.requires {
+            migration_content.push_str(&format!("CREATE EXTENSION IF NOT EXISTS {};\n", req));
+        }
+        migration_content.push_str("\n");
     }
 
     // First installation requires different SQL than subsequent versions
@@ -76,29 +82,18 @@ pub async fn add(
             }
         }
     }
-    let existing_update_paths = update_paths(&mut conn, &payload.metadata.extension_name).await?;
 
-    for upgrade_file in &payload.upgrade_files {
-        if !existing_update_paths.contains(&UpdatePath {
-            source: upgrade_file.from_version.clone(),
-            target: upgrade_file.to_version.clone(),
-        }) {
-            migration_content.push_str(&format!(
-                "SELECT pgtle.install_update_path('{extension}', '{from_version}', '{to_version}',
-                $SQL${body}$SQL$);\n\n",
-                extension = payload.metadata.extension_name,
-                from_version = upgrade_file.from_version,
-                to_version = upgrade_file.to_version,
-                body = upgrade_file.body
-            ));
-        }
-    }
+    migration_content.push_str(&format!(
+        "-- Create the extension\nCREATE EXTENSION {};\n",
+        payload.metadata.extension_name
+    ));
 
     // Set default version
     migration_content.push_str(&format!(
         "-- Setting default version to {}\n",
         payload.metadata.default_version
     ));
+
     migration_content.push_str(&format!(
         "SELECT pgtle.set_default_version('{extension}', '{default_version}');\n",
         extension = payload.metadata.extension_name,
