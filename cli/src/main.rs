@@ -155,6 +155,12 @@ async fn main() -> anyhow::Result<()> {
             output_path,
             install_args: InstallArgs { path, package },
         } => {
+            if let Some(_package) = package {
+                return Err(anyhow::anyhow!(
+                    "Generating migrations from packages is not yet supported"
+                ));
+            }
+
             let current_dir = env::current_dir()?;
             let extension_dir = path.as_ref().unwrap_or(&current_dir);
             let payload = models::Payload::from_path(extension_dir)?;
