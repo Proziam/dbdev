@@ -15,10 +15,10 @@ pub async fn add(
 ) -> anyhow::Result<()> {
     let existing_versions = extension_versions(&mut conn, &payload.metadata.extension_name).await?;
     let mut installed_extension_once = !existing_versions.is_empty();
+    let mut versions_installed_now = HashSet::new();
 
     let timestamp = Utc::now().format("%Y%m%d%H%M%S");
     let mut migration_content = String::new();
-    let mut versions_installed_now = HashSet::new();
 
     // Header with metadata
     migration_content.push_str(&format!(
@@ -65,15 +65,17 @@ pub async fn add(
                     version = install_file.version,
                     comment = payload.metadata.comment.as_deref().unwrap_or(""),
                     body = install_file.body,
-                    requires = payload.metadata.requires.join(",")));
+                    requires = payload.metadata.requires
+                        .iter()
+                        .map(|r| format!("'{}'", r))
+                        .collect::<Vec<_>>()
+                        .join(",")));
 
                 versions_installed_now.insert(install_file.version.clone());
                 installed_extension_once = true;
             }
         }
     }
-
-    // Add upgrade paths
     let existing_update_paths = update_paths(&mut conn, &payload.metadata.extension_name).await?;
 
     for upgrade_file in &payload.upgrade_files {
